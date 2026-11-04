@@ -113,6 +113,79 @@ describe("search", () => {
     expect(h.app.state.searchMatches?.matches[1].focus).toBe(false);
   });
 
+  it("should keep text search results in scene order when text is moved", async () => {
+    window.HTMLElement.prototype.scrollIntoView = jest.fn();
+
+    API.setElements([
+      API.createElement({ type: "text", text: "test one", y: 0 }),
+      API.createElement({ type: "text", text: "test two", y: 100 }),
+    ]);
+
+    const [firstText, secondText] = h.elements as ExcalidrawTextElement[];
+
+    Keyboard.withModifierKeys({ ctrl: true }, () => {
+      Keyboard.keyPress(KEYS.F);
+    });
+
+    const searchInput = await querySearchInput();
+    updateTextEditor(searchInput, "test");
+
+    await waitFor(() => {
+      expect(h.app.state.searchMatches?.matches.map(({ id }) => id)).toEqual([
+        firstText.id,
+        secondText.id,
+      ]);
+    });
+
+    API.updateElement(firstText, { y: 200 });
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(h.app.state.searchMatches?.matches.map(({ id }) => id)).toEqual([
+      firstText.id,
+      secondText.id,
+    ]);
+  });
+
+  it("should keep frame search results before text results when elements are moved", async () => {
+    window.HTMLElement.prototype.scrollIntoView = jest.fn();
+
+    API.setElements([
+      API.createElement({ type: "frame", y: 0 }),
+      API.createElement({ type: "frame", y: 100 }),
+      API.createElement({ type: "text", text: "test text", y: 200 }),
+    ]);
+
+    const [firstFrame, secondFrame, text] = h.elements as [
+      ExcalidrawFrameLikeElement,
+      ExcalidrawFrameLikeElement,
+      ExcalidrawTextElement,
+    ];
+    API.updateElement(firstFrame, { name: "test one" });
+    API.updateElement(secondFrame, { name: "test two" });
+
+    Keyboard.withModifierKeys({ ctrl: true }, () => {
+      Keyboard.keyPress(KEYS.F);
+    });
+
+    const searchInput = await querySearchInput();
+    updateTextEditor(searchInput, "test");
+
+    const expectedOrder = [firstFrame.id, secondFrame.id, text.id];
+    await waitFor(() => {
+      expect(h.app.state.searchMatches?.matches.map(({ id }) => id)).toEqual(
+        expectedOrder,
+      );
+    });
+
+    API.updateElement(firstFrame, { y: 300 });
+    API.updateElement(text, { y: 400 });
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(h.app.state.searchMatches?.matches.map(({ id }) => id)).toEqual(
+      expectedOrder,
+    );
+  });
+
   it("should match text split across multiple lines", async () => {
     const scrollIntoViewMock = jest.fn();
     window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
